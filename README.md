@@ -24,18 +24,18 @@ python -m venv venv
 source venv/bin/activate  # On Windows use: venv\Scripts\activate
 ```
 
-### 3. Install Dependencies
+## 3. Install Dependencies
 ```bash
-pip install -r requirements.txt
+pip install transformers playwright beautifulsoup4 requests asyncio
+playwright install
 ```
-
 ## Running the Pipeline
 ### 1. Prepare Your Data
 Ensure you have a JSON file named `trending_topics_info.json` in the project directory. This file should contain Reddit posts with metadata like likes, comments, and timestamps.
 
 ### 2. Run the Detector
 ```bash
-python main.py
+python analysis.py
 ```
 
 ## Expected Output
