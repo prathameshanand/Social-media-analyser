@@ -1,3 +1,7 @@
+# pip install transformers torch spacy
+# python -m spacy download en_core_web_sm
+
+
 import json
 import asyncio
 from datetime import datetime
