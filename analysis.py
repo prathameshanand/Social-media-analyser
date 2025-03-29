@@ -2,108 +2,129 @@
 # python -m spacy download en_core_web_sm
 
 
+
+
 import json
-import asyncio
-from datetime import datetime
-from playwright.async_api import async_playwright
-import requests
-from bs4 import BeautifulSoup
-from transformers import pipeline
+import re
+import spacy
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import time
 
-class FakeNewsDetector:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.llm = pipeline("text-generation", model="mistralai/Mistral-7B-v0.1")
-        self.current_time = datetime.utcnow().timestamp()
-    
-    def load_json(self):
-        with open(self.file_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    
-    def extract_claims(self, text):
-        """Extract claims using an LLM."""
-        prompt = f"Extract the main verifiable claim from this text: '{text}'"
-        response = self.llm(prompt, max_length=100, do_sample=True)
-        return response[0]['generated_text'] if response else None
-    
-    def normalize(self, value, max_value=100):
-        return min(value / max_value, 1.0)  # Scale to 0-1 range
-    
-    def compute_score(self, likes, comments, created_utc):
-        """Calculate a credibility score based only on subreddit age."""
-        subreddit_age = (self.current_time - created_utc) / (30 * 24 * 60 * 60)  # Convert seconds to months
-        norm_likes = self.normalize(likes, 1000)
-        norm_comments = self.normalize(comments, 500)
-        norm_age = self.normalize(subreddit_age, 120)  # Normalize to 10 years (120 months)
-        return (0.4 * norm_likes) + (0.3 * norm_comments) + (0.3 * norm_age)
-    
-    def categorize_claim(self, score):
-        if score > 0.7:
-            return "True"
-        elif score < 0.3:
-            return "False"
-        return "Neutral"
-    
-    def generate_search_query(self, claim):
-        return f"Is it true that {claim}?"
-    
-    async def google_search(self, query):
-        """Use Playwright to fetch Google search results."""
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            await page.goto(f"https://www.google.com/search?q={query}")
-            links = await page.evaluate("Array.from(document.querySelectorAll('a')).map(a => a.href)")
-            await browser.close()
-            return links[:5]  # Return top 5 links
-    
-    def scrape_text(self, url):
-        """Scrape and clean text from the webpage."""
-        try:
-            response = requests.get(url, timeout=5)
-            soup = BeautifulSoup(response.text, "html.parser")
-            paragraphs = soup.find_all("p")
-            return " ".join([p.get_text() for p in paragraphs])[:2000]
-        except Exception:
-            return ""
-    
-    def verify_claim(self, claim, text):
-        """Use LLM to determine if the scraped content supports or refutes the claim."""
-        prompt = f"Claim: '{claim}'\nEvidence: '{text}'\nDoes this evidence support, refute, or remain neutral about the claim?"
-        response = self.llm(prompt, max_length=50, do_sample=True)
-        return response[0]['generated_text'] if response else "neutral"
-    
-    async def process_json(self):
-        data = self.load_json()
-        result = []
-        
-        for topic in data:
-            for post in topic.get("reddit_posts", []):
-                claim = self.extract_claims(post["title"])
-                if not claim:
-                    continue
-                
-                score = self.compute_score(post["score"], post["comments_count"], post["created_utc"])
-                category = self.categorize_claim(score)
-                
-                if category in ["Neutral", "False"]:
-                    query = self.generate_search_query(claim)
-                    urls = await self.google_search(query)
-                    texts = [self.scrape_text(url) for url in urls]
-                    verdicts = [self.verify_claim(claim, text) for text in texts if text]
-                    
-                    if verdicts.count("support") > verdicts.count("refute"):
-                        category = "True"
-                    elif verdicts.count("refute") > verdicts.count("support"):
-                        category = "False"
-                    else:
-                        category = "Unverified"
-                
-                result.append({"claim": claim, "verdict": category})
-        
-        return result
+# Load spaCy for natural language processing
+nlp = spacy.load("en_core_web_sm")
 
-# Run the pipeline
-file_path = "trending_topics_info.json"
-detector = FakeNewsDetector(file_path)
-asyncio.run(detector.process_json())
+# Verify GPU availability
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"GPU device: {torch.cuda.get_device_name(0)}")
+else:
+    print("Warning: GPU not detected. Running on CPU will be slow.")
+
+# Load the Phi-3-mini-4k-instruct model and tokenizer
+model_name = "microsoft/Phi-3-mini-4k-instruct"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16)  # FP16 for efficiency
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+print(f"Model loaded on {device} with {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
+
+# Function to extract valid historical/economic claims from text
+def extract_valid_claims(text):
+    """Extract claims that are historically or economically significant from a block of text."""
+    if not isinstance(text, str) or not text.strip():
+        return []
+    
+    doc = nlp(text)
+    return [sent.text.strip() for sent in doc.sents if len(sent.text) > 20 and not is_irrelevant_claim(sent.text)]
+
+# Function to determine if a claim is irrelevant
+def is_irrelevant_claim(claim):
+    """Determine if a claim is irrelevant based on specific keywords or phrases."""
+    irrelevant_keywords = [
+        "welcome", "thread", "question", "ask", "simple", "silly", "rules", "guidelines", "discuss",
+        "discussion", "community", "promote", "advertise", "opinion", "thoughts", "well", "good", "try", "dreams"
+    ]
+    claim_lower = claim.lower()
+    return any(keyword in claim_lower for keyword in irrelevant_keywords)
+
+def extract_and_validate_claims_with_phi3(text):
+    """Use the LLM to extract and validate claims directly from the text."""
+    validated_claims = []
+    start_time = time.time()
+    prompt = (
+        f"You are an expert in history and economics. Analyze the following text and extract all historically or economically significant claims. "
+        f"For each claim, evaluate its accuracy based on facts up to April 2024. Provide a brief explanation for each claim and conclude with "
+        f"'Verdict: True' or 'Verdict: False'.\n\n"
+        f"Text: {text}\n\n"
+        f"Output the results in the format:\n"
+        f"- Claim: <claim>\n  Status: <True/False>\n  Explanation: <explanation>\n"
+    )
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024).to(device)
+    
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=500,  # Allow for longer responses
+            temperature=0.7,
+            do_sample=True
+        )
+    
+    response = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+    end_time = time.time()
+    print(f"Processed text in {end_time - start_time:.2f} seconds")
+    
+    # Parse the response into claims, statuses, and explanations
+    for line in response.split("\n"):
+        if line.startswith("- Claim:"):
+            claim = line.replace("- Claim:", "").strip()
+        elif line.startswith("  Status:"):
+            status = line.replace("  Status:", "").strip()
+        elif line.startswith("  Explanation:"):
+            explanation = line.replace("  Explanation:", "").strip()
+            validated_claims.append((claim, status, explanation))
+    
+    return validated_claims
+
+# Update the analyze_json function to use the new approach
+def analyze_json(file_path):
+    """Analyze JSON data to extract and validate claims."""
+    print(f"Attempting to load JSON file: {file_path}")
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f"Successfully loaded JSON with {len(data)} top-level entries")
+    except Exception as e:
+        print(f"Error loading JSON: {str(e)}")
+        return
+
+    for topic_data in data:
+        reddit_posts = topic_data.get("reddit_posts", [])
+        youtube_videos = topic_data.get("youtube_videos", [])
+
+        for post in reddit_posts:
+            selftext = post.get("selftext", "")
+            print(f"Processing Reddit post '{post.get('title', 'Untitled')}'")
+            validated_claims = extract_and_validate_claims_with_phi3(selftext)
+            print(f"Validated claims from Reddit post '{post.get('title', 'Untitled')}':")
+            for claim, status, explanation in validated_claims:
+                print(f"- Claim: {claim}")
+                print(f"  Status: {status}")
+                print(f"  Explanation: {explanation}")
+                print()
+
+        for video in youtube_videos:
+            transcript = video.get("transcript", "")
+            print(f"Processing YouTube video '{video.get('title', 'Untitled')}'")
+            validated_claims = extract_and_validate_claims_with_phi3(transcript)
+            print(f"Validated claims from YouTube video '{video.get('title', 'Untitled')}':")
+            for claim, status, explanation in validated_claims:
+                print(f"- Claim: {claim}")
+                print(f"  Status: {status}")
+                print(f"  Explanation: {explanation}")
+                print()
+
+# Entry point
+if __name__ == "__main__":
+    
+    analyze_json("trending_topics_info.json")
