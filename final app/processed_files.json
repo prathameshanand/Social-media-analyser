@@ -1,0 +1,69 @@
+{
+  "processed": {
+    "/home/anand/Documents/data/reddit_data23146574.json": {
+      "status": "done",
+      "file": "reddit_data23146574.json",
+      "steps": {
+        "main_tokens": 608,
+        "main_status": "saved",
+        "v2_tokens": 606,
+        "v2_status": "saved"
+      },
+      "processed_at": "2025-10-07 23:40:34"
+    },
+    "/home/anand/Documents/data/reddit_data56498.json": {
+      "status": "done",
+      "file": "reddit_data56498.json",
+      "steps": {
+        "main_tokens": 1077,
+        "main_status": "saved",
+        "v2_tokens": 434,
+        "v2_status": "saved"
+      },
+      "processed_at": "2025-10-08 01:06:59"
+    },
+    "/home/anand/Documents/data/tweets_output469574.json": {
+      "status": "done",
+      "file": "tweets_output469574.json",
+      "steps": {
+        "main_tokens": 49,
+        "main_status": "saved",
+        "v2_tokens": 163,
+        "v2_status": "saved"
+      },
+      "processed_at": "2025-10-08 01:35:29"
+    },
+    "/home/anand/Documents/data/youtube_search_output25489.json": {
+      "status": "done",
+      "file": "youtube_search_output25489.json",
+      "steps": {
+        "main_tokens": 140,
+        "main_status": "saved",
+        "v2_tokens": 78,
+        "v2_status": "saved"
+      },
+      "processed_at": "2025-10-08 02:52:15"
+    },
+    "/home/anand/Documents/data/youtube_search_output54198796.json": {
+      "status": "done",
+      "file": "youtube_search_output54198796.json",
+      "steps": {
+        "main_tokens": 864,
+        "main_status": "saved",
+        "v2_tokens": 355,
+        "v2_status": "saved"
+      },
+      "processed_at": "2025-10-08 04:03:22"
+    },
+    "/home/anand/final app/data/youtube_search_output.json": {
+      "status": "processing",
+      "file": "youtube_search_output.json",
+      "steps": {}
+    },
+    "/home/anand/Documents/data/reddit_search_output1.json": {
+      "status": "processing",
+      "file": "reddit_search_output1.json",
+      "steps": {}
+    }
+  }
+}

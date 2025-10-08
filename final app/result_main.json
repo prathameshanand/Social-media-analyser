@@ -1,0 +1,3 @@
+{
+  "combined_error": "Traceback (most recent call last):\n  File \"/home/anand/final app/streamlit_app.py\", line 96, in safe_call_with_streamable\n    result = fn(input_path, **kwargs) if kwargs else fn(input_path)\nTypeError: combined_analysis() missing 1 required positional argument: 'partial_results'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/home/anand/final app/streamlit_app.py\", line 152, in main_entry\n    result = safe_call_with_streamable(fn, input_path, stream=stream)\n  File \"/home/anand/final app/streamlit_app.py\", line 100, in safe_call_with_streamable\n    result = fn(input_path)\nTypeError: combined_analysis() missing 1 required positional argument: 'partial_results'\n"
+}
