@@ -13,8 +13,8 @@ def combine_analysis(json_path):
 path = "/home/anand/Documents/data/reddit_search_output56498.json"
 combine_analysis(path)
 #!/usr/bin/env python3
-"""
-combine_to_single_json.py
+# """
+# combine_to_single_json.py
 
 # Controller script:
 # - Scans /home/anand/Documents/data for your target files.
